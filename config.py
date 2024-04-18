@@ -9,5 +9,7 @@ coco_path = 'E:\\xiaoj\\project\\detr\\datasets\\'  # path to coco datase
 epoch = 30        # number of epochs to train
 batch_size = 5
 start_epoch = 1
+output_dir = ''
+
 
 
