@@ -12,6 +12,9 @@ import torch
 import torchvision.transforms as T
 from torch import nn
 from torchvision.models import resnet50
+import json
+import config
+from models.detr import DETR,build_backbone,build_transformer
 torch.set_grad_enabled(False)
 # COCO classes
 CLASSES = [
@@ -68,13 +71,30 @@ def plot_results(pil_img, prob, boxes):
     plt.show()
 def load_custom_model(model_path):
     # 创建模型配置。根据需要调整
-    detr = DETRdemo(num_classes=91)
-    # model = torch.hub.load('facebookresearch/detr:main', 'detr_resnet50', pretrained=True)
-    state_dict = torch.load(".\models\detr_demo-da2a99e9.pth")
+    # detr = DETRdemo(num_classes=91)
+    # detr = torch.hub.load('facebookresearch/detr:main', 'detr_resnet50', pretrained=True)
+    args = config.get_args_parser()
+    backbone = build_backbone(args)
+
+    transformer = build_transformer(args)
+
+    detr = DETR(
+        backbone,
+        transformer,
+        num_classes=91,
+        num_queries=args.num_queries,
+        aux_loss=args.aux_loss,
+    )
+    state_dict = torch.load(model_path)
+    json_str = json.dumps(str(state_dict))
+    with open("data.json", "w") as file:
+        file.write(json_str)
     # state_dict = torch.hub.load_state_dict_from_url(
     #     url='https://dl.fbaipublicfiles.com/detr/detr_demo-da2a99e9.pth',
     #     map_location='cpu', check_hash=True)
-    detr.load_state_dict(state_dict)
+    detr.load_state_dict(state_dict['model'])
+    # device = torch.device("cuda:0")
+    # detr.to(device)
     detr.eval()
     return detr
 
@@ -150,15 +170,15 @@ class DETRdemo(nn.Module):
         return {'pred_logits': self.linear_class(h),
                 'pred_boxes': self.linear_bbox(h).sigmoid()}
 # 示例用法
-model = load_custom_model('latest.pth')  # 加载模型
-row_image = Image.open('000000000063.jpg').convert("RGB")
+model = load_custom_model('./models/checkpoint.pth')  # 加载模型
+row_image = Image.open('.\\datasets\\train2017\\000000000036.jpg').convert("RGB")
 # mean-std normalize the input image (batch-size: 1)
 img = transform(row_image).unsqueeze(0)
 # propagate through the model
 outputs = model(img)
 # keep only predictions with 0.7+ confidence
 probas = outputs['pred_logits'].softmax(-1)[0, :, :-1]
-keep = probas.max(-1).values > 0.9
+keep = probas.max(-1).values > 0.1
 # convert boxes from [0; 1] to image scales
 bboxes_scaled = rescale_bboxes(outputs['pred_boxes'][0, keep], row_image.size)
 plot_results(row_image, probas[keep], bboxes_scaled)
